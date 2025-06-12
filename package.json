@@ -1,0 +1,19 @@
+{
+  "name": "duel-of-sages",
+  "version": "1.0.0",
+  "description": "P2P typing racer",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/hemareso/Duel-of-Sages.git"
+  },
+  "author": "hemareso",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hemareso/Duel-of-Sages/issues"
+  },
+  "homepage": "https://github.com/hemareso/Duel-of-Sages#readme"
+}
