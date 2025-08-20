@@ -2,9 +2,11 @@
   "name": "duel-of-sages",
   "version": "1.0.0",
   "description": "P2P typing racer",
-  "main": "index.js",
+  "main": "index.html",
   "scripts": {
-    "test": "test"
+    "test": "test",
+    "start": "concurrently \"npx http-server src -c-1\" \"sleep 2 && chromium --new-window http://127.0.0.1:8080\" \"sleep 2 && firefox --new-window\"",
+    "editor": "npx phasereditor2d-launcher -project ."
   },
   "repository": {
     "type": "git",
@@ -15,5 +17,12 @@
   "bugs": {
     "url": "https://github.com/hemareso/Duel-of-Sages/issues"
   },
-  "homepage": "https://github.com/hemareso/Duel-of-Sages#readme"
+  "homepage": "https://github.com/hemareso/Duel-of-Sages#readme",
+  "dependencies": {
+    "concurrently": "^9.2.0",
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "phasereditor2d-launcher": "^3.67.0"
+  }
 }
