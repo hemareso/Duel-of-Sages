@@ -10,9 +10,9 @@ export default class MainScene extends Phaser.Scene{
 
   preload ()
   {
-    this.load.image('sky', './assets/sky.png');
+    this.load.image('sky', './src/assets/sky.png');
 
-    this.load.bitmapFont('black-sans', './assets/black-sans/black-sans.png', './assets/black-sans/black-sans.xml');
+    this.load.bitmapFont('black-sans', './src/assets/black-sans/black-sans.png', './src/assets/black-sans/black-sans.xml');
   }
 
   init(data) {

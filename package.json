@@ -5,7 +5,7 @@
   "main": "index.html",
   "scripts": {
     "test": "test",
-    "start": "concurrently \"npx http-server src -c-1\" \"sleep 2 && chromium --new-window http://127.0.0.1:8080\" \"sleep 2 && firefox --new-window\"",
+    "start": "concurrently \"npx http-server . -c-1\" \"sleep 2 && chromium --new-window http://127.0.0.1:8080\" \"sleep 2 && firefox --new-window\"",
     "editor": "npx phasereditor2d-launcher -project ."
   },
   "repository": {

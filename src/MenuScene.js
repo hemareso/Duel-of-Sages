@@ -6,9 +6,9 @@ export default class MenuScene extends Phaser.Scene {
 
   preload ()
   {
-    this.load.image('sky', './assets/sky.png');
+    this.load.image('sky', './src/assets/sky.png');
 
-    this.load.bitmapFont('green-sans', './assets/green-sans/green-sans.png', './assets/green-sans/green-sans.xml');
+    this.load.bitmapFont('green-sans', './src/assets/green-sans/green-sans.png', './src/assets/green-sans/green-sans.xml');
   }
   
   create ()
