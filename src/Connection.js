@@ -1,17 +1,31 @@
-export default class Connection {
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js"
 
+export default class Connection {
   constructor() {
-    this.configuration = {
+    const rtcConfig = {
       'iceServers': [{'urls': 'stun:stun.l.google.com:19302', }, {'urls': 'stun:stun1.l.google.com:19302', }],
       'iceTransportPolicy': 'all'
     }
 
-    this.peerConnection = new RTCPeerConnection(this.configuration);
+    const firebaseConfig = {
+      apiKey: "AIzaSyChBEI28RPqGyEBAq2g6awnJdPVcscFT_U",
+      authDomain: "duel-of-sages.firebaseapp.com",
+      projectId: "duel-of-sages",
+      storageBucket: "duel-of-sages.firebasestorage.app",
+      messagingSenderId: "192662612649",
+      appId: "1:192662612649:web:25f92c013e2820328a17b8"
+    };
+
+    const firebase = initializeApp(firebaseConfig);
+
+    this.db = getFirestore(firebase);
+    this.connectionDocumentId;
+
+    this.peerConnection = new RTCPeerConnection(rtcConfig);
 
     this.dataChannel = null;
     this.channelOpen = false;
-
-    // this.channelChange = Phaser.Events.EventEmitter();
   }
 
   async hostConnection() {
@@ -27,18 +41,55 @@ export default class Connection {
     const offer = await this.peerConnection.createOffer();
     await this.peerConnection.setLocalDescription(offer);
 
+    // todo maybe later change to live negotiation
     let candidates = new Promise(resolve => {
       setTimeout(() => resolve(gatheringCandidates), 3000)
     });
     
-    const hostData = new InternalConnectionData(offer, await candidates);
-    console.log('hostData: ' + JSON.stringify(hostData));
+    let docRef;
+    try {
+      docRef = await addDoc(
+        collection(this.db, "connection"),
+        {
+         offer: JSON.stringify(offer),
+         hostCandidates: JSON.stringify(await candidates)
+        }
+      );
+      console.log("Document written with ID: ", docRef.id);
+    } catch (e) {
+      console.error("Error adding document: ", e);
+    }
 
-    return hostData.encode64();
+    this.connectionDocumentId = docRef.id;
+    console.log('hostDataId: ' + this.connectionDocumentId);
+
+    this.hostHandshake();
+
+    return this.connectionDocumentId;
   }
 
-  async guestConnection(hostData) {
+  hostHandshake() {
+    let unsubscribe;
+    unsubscribe = onSnapshot(doc(this.db, "connection", this.connectionDocumentId), (doc) => {
+      if (doc.data().answer == null || doc.data().guestCandidates == null) {
+        return;
+      }
 
+      const answer = JSON.parse(doc.data().answer);
+      const guestCandidates = JSON.parse(doc.data().guestCandidates);
+
+      this.peerConnection.setRemoteDescription(answer);
+
+      for(const iceCand of guestCandidates) {
+        this.peerConnection.addIceCandidate(new RTCIceCandidate(iceCand["new-ice-candidate"]));
+      }
+
+      // todo understand why this setRemoteDescription is triggering more then once
+      unsubscribe();
+    });
+  }
+
+  async guestConnection(hostDataId) {
     this.setupDataChannel(false);
 
     let gatheringCandidates = [];
@@ -48,34 +99,44 @@ export default class Connection {
         }
     });
 
-    const connectionData = InternalConnectionData.decode64(hostData);    
-    this.peerConnection.setRemoteDescription(connectionData.connectionDescription);
-    for(const iceCand of connectionData.iceCandidates) {
+    this.connectionDocumentId = hostDataId;
+    const docRef = doc(this.db, "connection", this.connectionDocumentId);
+    const document = await getDoc(docRef);
+    if (document.exists()) {
+      console.log("Got hostDoc: " + document.id);
+    } else {
+      console.log("Didnt found target document: " + this.connectionDocumentId);
+    }
+
+    const offer = JSON.parse(document.data().offer);
+    const hostCandidates = JSON.parse(document.data().hostCandidates);
+
+    this.peerConnection.setRemoteDescription(offer);
+    for(const iceCand of hostCandidates) {
       this.peerConnection.addIceCandidate(new RTCIceCandidate(iceCand["new-ice-candidate"]));
     }
 
-    const answer = this.peerConnection.createAnswer();
+    // answer is empty
+    const answer = await this.peerConnection.createAnswer();
     this.peerConnection.setLocalDescription(answer);
-    console.log('answer: ' + answer);
 
     let candidates = new Promise(resolve => {
       setTimeout(() => resolve(gatheringCandidates), 3000)
     });
 
-    const guestData = new InternalConnectionData(await answer, await candidates);
-    console.log('guestData: ' + JSON.stringify(guestData));
+    console.log("guest Data (answer): " + JSON.stringify(answer));
+    console.log("guest Data (candidates): " + JSON.stringify(await candidates));
 
-    return guestData.encode64();
-  }
-
-  hostHandshake(guestData) {
-    const handshakeData = InternalConnectionData.decode64(guestData);
-    console.log('handshakeData: ' + JSON.stringify(handshakeData));
-
-    this.peerConnection.setRemoteDescription(handshakeData.connectionDescription);
-
-    for(const iceCand of handshakeData.iceCandidates) {
-      this.peerConnection.addIceCandidate(new RTCIceCandidate(iceCand["new-ice-candidate"]));
+    try {
+       await updateDoc(docRef,
+        {
+         answer: JSON.stringify(answer),
+         guestCandidates: JSON.stringify(await candidates),
+        }
+      );
+      console.log("Document updated with ID: ", docRef.id);
+    } catch (e) {
+      console.error("Error updating document: ", e);
     }
   }
 
@@ -135,6 +196,7 @@ export default class Connection {
   {
     return new Promise(resolve => {
       const intervalID = setInterval(() => {
+        console.log()
         if (!!!this.dataChannel) {
           return;
         }
@@ -175,23 +237,5 @@ export default class Connection {
       }, 300)
 
     });
-  }
-}
-
-class InternalConnectionData {
-  constructor(
-    connectionDescription,
-    iceCandidates
-  ) {
-    this.connectionDescription = connectionDescription;
-    this.iceCandidates = iceCandidates;
-  }
-
-  encode64() {
-    return btoa(JSON.stringify(this));
-  }
-
-  static decode64(data)  {
-    return JSON.parse(atob(data));
   }
 }

@@ -20,6 +20,7 @@
   "homepage": "https://github.com/hemareso/Duel-of-Sages#readme",
   "dependencies": {
     "concurrently": "^9.2.0",
+    "firebase": "^12.4.0",
     "phaser": "^3.90.0"
   },
   "devDependencies": {

@@ -50,30 +50,20 @@ export default class MainScene extends Phaser.Scene{
   async hostChallenge()
   {
     const connection = new Connection();
-    const hostData = await connection.hostConnection();
+    const hostDataId = await connection.hostConnection();
     
-    let input;
-    const emitter = new Phaser.Events.EventEmitter();
-
     const clipboard = this.add.text(400, 300, 'Click here to copy the guest URL: \n'+ document.URL +'?challenge=(...)')
     clipboard.setInteractive().on('pointerdown', () => {
       clipboard.setTint('#f03ee7')
-      navigator.clipboard.writeText(document.URL +'?challenge=' + hostData)
-
-      setTimeout(() => {
-        input = prompt("Place the guest handshake here")
-        emitter.emit('handshake')
-      }, 1000);
+      navigator.clipboard.writeText(document.URL +'?challenge=' + hostDataId)
     })
 
-    emitter.on('handshake', _ => {
-      //receive handshake
-      connection.hostHandshake(input)
-      clipboard.destroy();
-    });
+    connection.hostHandshake();
 
     console.log("Await connection...")
     await connection.awaitOpenChannel(true);
+
+    clipboard.destroy();
 
     const word = Words.get();
     connection.send(word);
@@ -83,20 +73,15 @@ export default class MainScene extends Phaser.Scene{
 
   async guestChallenge() {
     const connection = new Connection();
-    const guestData = await connection.guestConnection(this.challenge.oponentData);
+    connection.guestConnection(this.challenge.oponentData);
 
-    const clipboard = this.add.text(400, 300, 'Click here to copy the host answer: \nhand shake data')
-    clipboard.setInteractive().on('pointerdown', () => {
-      clipboard.setTint('#f03ee7')
-      navigator.clipboard.writeText(guestData)
-    });
+    const awaitingMessage = this.add.text(400, 300, 'Await connection...')
 
     console.log("Await connection...")
     await connection.awaitOpenChannel(false);
+    awaitingMessage.destroy();
 
     const word = connection.listen();
-
-    clipboard.destroy();
 
     this.asyncChallenge(connection, await word);
   }
