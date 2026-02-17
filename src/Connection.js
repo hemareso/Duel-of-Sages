@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js"
+import Encryption from "./Encryption.js";
 
 export default class Connection {
   constructor() {
@@ -20,10 +21,10 @@ export default class Connection {
     const firebase = initializeApp(firebaseConfig);
 
     this.db = getFirestore(firebase);
-    this.connectionDocumentId;
 
     this.peerConnection = new RTCPeerConnection(rtcConfig);
 
+    this.encryptionKey = null;
     this.dataChannel = null;
     this.channelOpen = false;
   }
@@ -45,14 +46,16 @@ export default class Connection {
     let candidates = new Promise(resolve => {
       setTimeout(() => resolve(gatheringCandidates), 3000)
     });
+
+    this.encryptionKey = await Encryption.generateKey();
     
     let docRef;
     try {
       docRef = await addDoc(
         collection(this.db, "connection"),
         {
-         offer: JSON.stringify(offer),
-         hostCandidates: JSON.stringify(await candidates)
+         offer: await Encryption.encrypt(this.encryptionKey, JSON.stringify(offer)),
+         hostCandidates: await Encryption.encrypt(this.encryptionKey, JSON.stringify(await candidates))
         }
       );
       console.log("Document written with ID: ", docRef.id);
@@ -60,23 +63,26 @@ export default class Connection {
       console.error("Error adding document: ", e);
     }
 
-    this.connectionDocumentId = docRef.id;
-    console.log('hostDataId: ' + this.connectionDocumentId);
+    const key64 = await Encryption.exportableKey(this.encryptionKey);
+    const hostDataToken = docRef.id + '@' + key64;
 
-    this.hostHandshake();
+    this.hostHandshake(docRef.id);
 
-    return this.connectionDocumentId;
+    return hostDataToken;
   }
 
-  hostHandshake() {
+  hostHandshake(connectionDocumentId) {
     let unsubscribe;
-    unsubscribe = onSnapshot(doc(this.db, "connection", this.connectionDocumentId), (doc) => {
+    unsubscribe = onSnapshot(doc(this.db, "connection", connectionDocumentId), async (doc) => {
       if (doc.data().answer == null || doc.data().guestCandidates == null) {
         return;
       }
 
-      const answer = JSON.parse(doc.data().answer);
-      const guestCandidates = JSON.parse(doc.data().guestCandidates);
+      const answer = JSON.parse(await Encryption.decrypt(this.encryptionKey, doc.data().answer));
+      const guestCandidates = JSON.parse(await Encryption.decrypt(this.encryptionKey, doc.data().guestCandidates));
+
+      // console.log("answer: " + JSON.stringify(answer));
+      // console.log("guestCandidates: " + JSON.stringify(guestCandidates));
 
       this.peerConnection.setRemoteDescription(answer);
 
@@ -84,12 +90,17 @@ export default class Connection {
         this.peerConnection.addIceCandidate(new RTCIceCandidate(iceCand["new-ice-candidate"]));
       }
 
-      // todo understand why this setRemoteDescription is triggering more then once
       unsubscribe();
     });
   }
 
-  async guestConnection(hostDataId) {
+  async guestConnection(hostDataToken) {
+    const hostArray = hostDataToken.split('@');
+    const hostDataId = hostArray[0];
+    const key64 = hostArray[1];
+
+    this.encryptionKey = await Encryption.importKey(key64);
+
     this.setupDataChannel(false);
 
     let gatheringCandidates = [];
@@ -99,24 +110,26 @@ export default class Connection {
         }
     });
 
-    this.connectionDocumentId = hostDataId;
-    const docRef = doc(this.db, "connection", this.connectionDocumentId);
+    const docRef = doc(this.db, "connection", hostDataId);
     const document = await getDoc(docRef);
     if (document.exists()) {
       console.log("Got hostDoc: " + document.id);
     } else {
-      console.log("Didnt found target document: " + this.connectionDocumentId);
+      console.log("Didnt found target document: " + hostDataId);
     }
 
-    const offer = JSON.parse(document.data().offer);
-    const hostCandidates = JSON.parse(document.data().hostCandidates);
+    const offer = JSON.parse(
+      await Encryption.decrypt(this.encryptionKey, document.data().offer)
+    );
+    const hostCandidates = JSON.parse(
+      await Encryption.decrypt(this.encryptionKey, document.data().hostCandidates)
+    );
 
     this.peerConnection.setRemoteDescription(offer);
     for(const iceCand of hostCandidates) {
       this.peerConnection.addIceCandidate(new RTCIceCandidate(iceCand["new-ice-candidate"]));
     }
 
-    // answer is empty
     const answer = await this.peerConnection.createAnswer();
     this.peerConnection.setLocalDescription(answer);
 
@@ -124,14 +137,14 @@ export default class Connection {
       setTimeout(() => resolve(gatheringCandidates), 3000)
     });
 
-    console.log("guest Data (answer): " + JSON.stringify(answer));
-    console.log("guest Data (candidates): " + JSON.stringify(await candidates));
+    // console.log("guest Data (answer): " + JSON.stringify(answer));
+    // console.log("guest Data (candidates): " + JSON.stringify(await candidates));
 
     try {
        await updateDoc(docRef,
         {
-         answer: JSON.stringify(answer),
-         guestCandidates: JSON.stringify(await candidates),
+         answer: await Encryption.encrypt(this.encryptionKey, JSON.stringify(answer)),
+         guestCandidates: await Encryption.encrypt(this.encryptionKey, JSON.stringify(await candidates)),
         }
       );
       console.log("Document updated with ID: ", docRef.id);
@@ -192,11 +205,11 @@ export default class Connection {
     console.log("sending message: " + message)
   }
 
-  awaitOpenChannel(isHost)
+  awaitOpenChannel(isHost) // todo refactor this method so it doesnt need a boolean flag
   {
     return new Promise(resolve => {
       const intervalID = setInterval(() => {
-        console.log()
+        console.log("awaiting channel loop")
         if (!!!this.dataChannel) {
           return;
         }

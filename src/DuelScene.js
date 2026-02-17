@@ -58,8 +58,6 @@ export default class MainScene extends Phaser.Scene{
       navigator.clipboard.writeText(document.URL +'?challenge=' + hostDataId)
     })
 
-    connection.hostHandshake();
-
     console.log("Await connection...")
     await connection.awaitOpenChannel(true);
 
