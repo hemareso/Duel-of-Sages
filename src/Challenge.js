@@ -9,6 +9,7 @@ export default class Challenge {
     this.timer = timer;
     this.oponentData = oponentData;
     this.scene = scene;
+    this.clouds = new Array(4);
 
     this.word;
     this.wordDisplay;
@@ -23,8 +24,12 @@ export default class Challenge {
     await this.countDownStart();
 
     this.word = challengeWord;
-    this.wordDisplay = this.scene.add.bitmapText(100, 150, 'black-sans', this.word, null);
-    this.wordDisplay.setScale(0.7);
+    this.wordDisplay = this.type ==='self' ?
+      this.scene.add.bitmapText(320, 47, 'black-sans', this.word, null) :
+      this.scene.add.bitmapText(350, 25, 'black-sans', this.word, null);
+    this.wordDisplay.setOrigin(0.5, 0,5);
+    this.wordDisplay.setScale(0.35);
+    this.wordDisplay.setDepth(1);
     this.answer = '';
 
     this.scene.input.keyboard.on('keydown', this.verifyKey, this);
@@ -33,26 +38,45 @@ export default class Challenge {
 
     return new Promise(resolve => {
       this.resultEmitter.on('calculated',
-         (r) => resolve(r)
+        (r) => {
+          if (this.type === 'self') {this.wordDisplay.destroy()}
+
+          resolve(r);
+        }
       );
     });
   }
 
   countDownStart()
   {
-    var countdown = this.scene.add.text(400, 300, 'Starts in: ' + 4);
-    for(let i = 1; i <= 3 ; i++) {
+    if (this.type === 'self') {
+      var countdown = this.scene.add.text(260, 50, 'Starts in: ' + 3).setColor('#000000');
+      for(let i = 1; i <= 2 ; i++) {
+        setTimeout(() => {
+          countdown.setText('Starts in: ' + (3-i));
+        }, i*1000)
+      };
+
       setTimeout(() => {
-        countdown.setText('Starts in: ' + (4-i))
-      }, i*1000)
+        countdown.destroy();
+      }, 3000);
     }
 
-    return new Promise(resolve => 
+    if (this.type === 'host' || this.type === 'guest') {
+      this.clouds[0] = this.scene.add.image(320, 180, 'cloud_one');
+
       setTimeout(() => {
-        countdown.destroy(true);
-        resolve(true);
-      }, 4000)
-    );
+        this.clouds[1] = this.scene.add.image(320, 180, 'cloud_two');
+      }, 1000);
+      setTimeout(() => {
+        this.clouds[2] = this.scene.add.image(320, 180, 'cloud_three');
+      }, 2000);
+      setTimeout(() => {
+        this.clouds[3] = this.scene.add.image(320, 180, 'cloud_word');
+      }, 3000);
+    }
+
+    return new Promise(resolve => setTimeout(() => resolve(), 3000));
   }
 
   verifyKey(keyEvent)
